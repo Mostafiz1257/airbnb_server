@@ -33,6 +33,7 @@ async function run() {
         await client.connect();
         const userCollection = client.db("AirCnC").collection("users")
         const roomCollection = client.db("AirCnC").collection("rooms")
+        const bookingCollection = client.db("AirCnC").collection("bookings")
 
 
         app.put('/users/:email', async (req, res) => {
@@ -49,30 +50,46 @@ async function run() {
         })
 
         //get user by email.
-        app.get('/user/:email',async(req,res)=>{
+        app.get('/user/:email', async (req, res) => {
             const email = req.params.email;
-            const query ={ email : email}
+            const query = { email: email }
             const result = await userCollection.findOne(query)
             res.send(result)
         })
-    //add rooms
-        app.post('/rooms',async(req,res)=>{
+        //add rooms
+        app.post('/rooms', async (req, res) => {
             const body = req.body;
             const result = await roomCollection.insertOne(body)
             res.send(result)
         })
 
-        app.get('/rooms',async(req,res)=>{
+        //add booking
+        app.post('/bookings', async (req, res) => {
+            try {
+                const booking = req.body;
+                console.log(booking);
+                const result = await bookingCollection.insertOne(booking)
+                res.send(result)
+            }
+            catch (err) {
+                console.log(err);
+            }
+
+        })
+
+        app.get('/rooms', async (req, res) => {
             const result = await roomCollection.find().toArray();
             res.send(result)
         })
 
-        app.get('/room/:id', async(req,res)=>{
+        app.get('/room/:id', async (req, res) => {
             const id = req.params.id;
-            const query ={ _id: new ObjectId(id)}
+            const query = { _id: new ObjectId(id) }
             const result = await roomCollection.findOne(query)
             res.send(result)
         })
+
+        //room booking
         // Connect the client to the server	(optional starting in v4.7)
 
         // Send a ping to confirm a successful connection
@@ -92,5 +109,6 @@ app.get('/', (req, res) => {
 app.listen(port, () => {
     console.log(`AirCnC server is running is port ${port}`);
 })
+
 
 
