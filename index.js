@@ -77,6 +77,46 @@ async function run() {
 
         })
 
+        // get bookings by individual email
+        app.get('/bookings', async (req, res) => {
+            const email = req.query.email;
+            if (!email) {
+                res.send([])
+            }
+            const query = { 'guest.email': email }
+            const result = await bookingCollection.find(query).toArray()
+            res.send(result)
+        })
+
+        //delete booking 
+        app.delete('/bookings/:id', async (req, res) => {
+            const id = req.params.id;
+            console.log(id);
+            const query = { _id: new ObjectId(id) }
+            const result = bookingCollection.deleteOne(query)
+            res.send(result)
+        })
+        
+        //update room booking status
+        app.patch('/rooms/status/:id', async (req, res) => {
+            try {
+
+                const id = req.params.id;
+                const status = req.body.status;
+                const query = { _id: new ObjectId(id) }
+                const updateDoc = {
+                    $set: {
+                        booked: status,
+                    },
+                }
+                const update = await roomCollection.updateOne(query, updateDoc)
+                res.send(update)
+            }
+            catch (error) {
+                console.log(error);
+            }
+        })
+
         app.get('/rooms', async (req, res) => {
             const result = await roomCollection.find().toArray();
             res.send(result)
