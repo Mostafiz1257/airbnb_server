@@ -96,7 +96,7 @@ async function run() {
             const result = bookingCollection.deleteOne(query)
             res.send(result)
         })
-        
+
         //update room booking status
         app.patch('/rooms/status/:id', async (req, res) => {
             try {
@@ -116,9 +116,26 @@ async function run() {
                 console.log(error);
             }
         })
-
+        //get all rooms
         app.get('/rooms', async (req, res) => {
             const result = await roomCollection.find().toArray();
+            res.send(result)
+        })
+
+     //delete a room
+     app.delete('/rooms/:id',async(req,res)=>{
+        const id = req.params.id;
+        console.log("This id is",id);
+        const query = { _id : new ObjectId(id)}
+        const result = await roomCollection.deleteOne(query)
+        res.send(result)
+     })
+
+        //get upload_room from an individual email (one email many room post )
+        app.get('/rooms/:email', async (req, res) => {
+            const email = req.params.email;
+            const query = { 'host.email': email };
+            const result = await roomCollection.find(query).toArray();
             res.send(result)
         })
 
