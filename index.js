@@ -2,8 +2,9 @@ const express = require("express")
 const app = express();
 require("dotenv").config();
 const cors = require("cors")
+const jwt = require("jsonwebtoken")
 const port = process.env.PORT || 5000;
-
+const stripe = require("stripe")(process.env.PAYMENT_SECRET_KEY)
 //middleware
 const corsOptions = {
     origin: "*",
@@ -27,6 +28,22 @@ const client = new MongoClient(uri, {
     }
 });
 
+const verifyJWT = (req, res, next) => {
+    const authorization = req.headers.authorization;
+    if (!authorization) {
+        return res.status(401).send({ error: true, message: "Unauthorized access" })
+    }
+    const token = authorization.split(' ')[1]
+    console.log(token);
+    jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (error, decoded) => {
+        if (error) {
+            return res.status(401).send({ error: true, message: "Unauthorized access" })
+        }
+        req.decoded = decoded;
+        next();
+    })
+
+}
 
 async function run() {
     try {
@@ -36,6 +53,25 @@ async function run() {
         const bookingCollection = client.db("AirCnC").collection("bookings")
 
 
+        app.post("/create-payment-intent", verifyJWT, async(req,res)=>{
+            const {price} = req.body;
+            if(price){
+                const amount = parseFloat(price) * 100;
+                const paymentIntent = await stripe.paymentIntents.create({
+                    amount:amount,
+                    currency: "usd",
+                    payment_method_types:['card']
+                })
+                res.send({ clientSecret: paymentIntent.client_secret,})
+            }
+        })
+        app.post('/jwt', (req, res) => {
+            const email = req.body;
+            const token = jwt.sign(email, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '1h' })
+            // console.log(token);
+            res.send({ token })
+
+        })
         app.put('/users/:email', async (req, res) => {
             const email = req.params.email;
             const user = req.body;
@@ -45,7 +81,6 @@ async function run() {
                 $set: user,
             }
             const result = await userCollection.updateOne(query, updateDoc, options)
-            console.log(result);
             res.send(result);
         })
 
@@ -67,7 +102,6 @@ async function run() {
         app.post('/bookings', async (req, res) => {
             try {
                 const booking = req.body;
-                console.log(booking);
                 const result = await bookingCollection.insertOne(booking)
                 res.send(result)
             }
@@ -87,11 +121,20 @@ async function run() {
             const result = await bookingCollection.find(query).toArray()
             res.send(result)
         })
+        // get bookings by individual host email
+        app.get('/host-bookings', async (req, res) => {
+            const email = req.query.email;
+            if (!email) {
+                res.send([])
+            }
+            const query = { host: email }
+            const result = await bookingCollection.find(query).toArray()
+            res.send(result)
+        })
 
         //delete booking 
         app.delete('/bookings/:id', async (req, res) => {
             const id = req.params.id;
-            console.log(id);
             const query = { _id: new ObjectId(id) }
             const result = bookingCollection.deleteOne(query)
             res.send(result)
@@ -122,18 +165,22 @@ async function run() {
             res.send(result)
         })
 
-     //delete a room
-     app.delete('/rooms/:id',async(req,res)=>{
-        const id = req.params.id;
-        console.log("This id is",id);
-        const query = { _id : new ObjectId(id)}
-        const result = await roomCollection.deleteOne(query)
-        res.send(result)
-     })
+        //delete a room
+        app.delete('/rooms/:id', async (req, res) => {
+            const id = req.params.id;
+            const query = { _id: new ObjectId(id) }
+            const result = await roomCollection.deleteOne(query)
+            res.send(result)
+        })
 
         //get upload_room from an individual email (one email many room post )
-        app.get('/rooms/:email', async (req, res) => {
+        app.get('/rooms/:email', verifyJWT, async (req, res) => {
+            const decodedEmail = req.decoded.email;
+            console.log("decoded email is", decodedEmail);
             const email = req.params.email;
+            if (email !== decodedEmail) {
+                return res.status(403).send({ error: true, message: "Forbidden access" })
+            }
             const query = { 'host.email': email };
             const result = await roomCollection.find(query).toArray();
             res.send(result)
