@@ -1,8 +1,9 @@
 const express = require("express")
 const app = express();
-require("dotenv").config();
 const cors = require("cors")
+require("dotenv").config();
 const jwt = require("jsonwebtoken")
+const nodemailer = require("nodemailer")
 const port = process.env.PORT || 5000;
 const stripe = require("stripe")(process.env.PAYMENT_SECRET_KEY)
 //middleware
@@ -10,8 +11,9 @@ const corsOptions = {
     origin: "*",
     credential: true,
     optionSuccessStatus: 200,
-
+    methods:["GET","POST","PATCH","DELETE","OPTIONS"]
 }
+app.options("",cors(corsOptions))
 app.use(cors(corsOptions))
 app.use(express.json())
 
@@ -34,13 +36,41 @@ const verifyJWT = (req, res, next) => {
         return res.status(401).send({ error: true, message: "Unauthorized access" })
     }
     const token = authorization.split(' ')[1]
-    console.log(token);
+    // console.log(token);
     jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (error, decoded) => {
         if (error) {
             return res.status(401).send({ error: true, message: "Unauthorized access" })
         }
         req.decoded = decoded;
         next();
+    })
+
+}
+
+//send a mail
+const sendMail = (emailData, emailAddress) => {
+    const transporter = nodemailer.createTransport({
+        service: "gmail",
+        auth: {
+            user: process.env.EMAIL,
+            pass: process.env.PASS
+        }
+    })
+
+    const mailOptions = {
+        from: process.env.EMAIL,
+        to: emailAddress,
+        subject: emailData.subject,
+        html: `<P>${emailData?.message}</p>`
+    }
+
+    transporter.sendMail(mailOptions, function (error, info) {
+        if (error) {
+            console.log(error);
+        }
+        else {
+            console.log("email send", +info.response);
+        }
     })
 
 }
@@ -53,16 +83,16 @@ async function run() {
         const bookingCollection = client.db("AirCnC").collection("bookings")
 
 
-        app.post("/create-payment-intent", verifyJWT, async(req,res)=>{
-            const {price} = req.body;
-            if(price){
+        app.post("/create-payment-intent", verifyJWT, async (req, res) => {
+            const { price } = req.body;
+            if (price) {
                 const amount = parseFloat(price) * 100;
                 const paymentIntent = await stripe.paymentIntents.create({
-                    amount:amount,
+                    amount: amount,
                     currency: "usd",
-                    payment_method_types:['card']
+                    payment_method_types: ['card']
                 })
-                res.send({ clientSecret: paymentIntent.client_secret,})
+                res.send({ clientSecret: paymentIntent.client_secret, })
             }
         })
         app.post('/jwt', (req, res) => {
@@ -103,6 +133,26 @@ async function run() {
             try {
                 const booking = req.body;
                 const result = await bookingCollection.insertOne(booking)
+
+
+                //send confirmation mail to guest user
+                sendMail({
+                    subject: "Booking successfully",
+                    message: `Booking Id : ${result?.insertedId}, Transaction Id : ${booking.transactionId}`
+                },
+                    booking?.guest?.email
+                )
+
+                //send confirmation mail to host user
+
+                sendMail({
+                    subject: "Your room got booked",
+                    message: `Booking Id : ${result?.insertedId}, Transaction Id : ${booking.transactionId}`
+                },
+                    booking?.host
+                )
+
+
                 res.send(result)
             }
             catch (err) {
