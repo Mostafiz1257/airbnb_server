@@ -77,13 +77,13 @@ const sendMail = (emailData, emailAddress) => {
 
 async function run() {
     try {
-        await client.connect();
+        // await client.connect();
         const userCollection = client.db("AirCnC").collection("users")
         const roomCollection = client.db("AirCnC").collection("rooms")
         const bookingCollection = client.db("AirCnC").collection("bookings")
 
 
-        app.post("/create-payment-intent", verifyJWT, async (req, res) => {
+        app.post("/create-payment-intent", async (req, res) => {
             const { price } = req.body;
             if (price) {
                 const amount = parseFloat(price) * 100;
@@ -224,7 +224,7 @@ async function run() {
         })
 
         //get upload_room from an individual email (one email many room post )
-        app.get('/rooms/:email', verifyJWT, async (req, res) => {
+        app.get('/rooms/:email',verifyJWT,  async (req, res) => {
             const decodedEmail = req.decoded.email;
             console.log("decoded email is", decodedEmail);
             const email = req.params.email;
